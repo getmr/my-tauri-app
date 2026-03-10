@@ -1,7 +1,7 @@
 use std::sync::Mutex;
 use std::sync::Arc;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine as _;
@@ -32,23 +32,26 @@ fn start_camera_stream(app: AppHandle, state: State<'_, CameraState>) -> Result<
     }
 
     thread::spawn(move || {
+        const TARGET_FPS: u32 = 15;
+        const FRAME_INTERVAL: Duration = Duration::from_millis(1000 / TARGET_FPS as u64);
+
         let request_candidates = [
             RequestedFormatType::Closest(CameraFormat::new(
-                Resolution::new(1920, 1080),
+                Resolution::new(640, 480),
                 FrameFormat::MJPEG,
                 30,
             )),
             RequestedFormatType::Closest(CameraFormat::new(
                 Resolution::new(1280, 720),
                 FrameFormat::MJPEG,
-                30,
+                24,
             )),
             RequestedFormatType::Closest(CameraFormat::new(
-                Resolution::new(1280, 720),
+                Resolution::new(640, 480),
                 FrameFormat::YUYV,
                 30,
             )),
-            RequestedFormatType::HighestFrameRate(30),
+            RequestedFormatType::HighestFrameRate(TARGET_FPS),
             RequestedFormatType::AbsoluteHighestFrameRate,
             RequestedFormatType::None,
         ];
@@ -81,6 +84,10 @@ fn start_camera_stream(app: AppHandle, state: State<'_, CameraState>) -> Result<
             }
         };
 
+        let selected_format = camera.camera_format();
+        let selected_frame_format = selected_format.format();
+        let mut last_emit_at: Option<Instant> = None;
+
         loop {
             if stop_rx.try_recv().is_ok() {
                 break;
@@ -88,28 +95,44 @@ fn start_camera_stream(app: AppHandle, state: State<'_, CameraState>) -> Result<
 
             match camera.frame() {
                 Ok(frame) => {
-                    let rgb = match frame.decode_image::<RgbFormat>() {
-                        Ok(image) => image,
-                        Err(e) => {
-                            let _ = app.emit("camera-error", format!("解码视频帧失败: {e}"));
+                    let now = Instant::now();
+                    if let Some(last_emit) = last_emit_at {
+                        if now.duration_since(last_emit) < FRAME_INTERVAL {
                             continue;
                         }
-                    };
-                    let mut encoded = Vec::new();
-                    let mut encoder = JpegEncoder::new_with_quality(&mut encoded, 92);
-                    if encoder
-                        .encode(
-                            rgb.as_raw(),
-                            rgb.width(),
-                            rgb.height(),
-                            ColorType::Rgb8.into(),
-                        )
-                        .is_err()
-                    {
-                        let _ = app.emit("camera-error", "编码视频帧失败");
-                        continue;
                     }
-                    let payload = BASE64.encode(encoded);
+                    last_emit_at = Some(now);
+
+                    let payload = if selected_frame_format == FrameFormat::MJPEG {
+                        BASE64.encode(frame.buffer())
+                    } else {
+                        let rgb = match frame.decode_image::<RgbFormat>() {
+                            Ok(image) => image,
+                            Err(e) => {
+                                let _ = app.emit("camera-error", format!("解码视频帧失败: {e}"));
+                                continue;
+                            }
+                        };
+
+                        let mut encoded =
+                            Vec::with_capacity((rgb.width() * rgb.height() / 4) as usize);
+                        let mut encoder = JpegEncoder::new_with_quality(&mut encoded, 80);
+                        if encoder
+                            .encode(
+                                rgb.as_raw(),
+                                rgb.width(),
+                                rgb.height(),
+                                ColorType::Rgb8.into(),
+                            )
+                            .is_err()
+                        {
+                            let _ = app.emit("camera-error", "编码视频帧失败");
+                            continue;
+                        }
+
+                        BASE64.encode(encoded)
+                    };
+
                     let _ = app.emit("camera-frame", payload);
                 }
                 Err(e) => {
