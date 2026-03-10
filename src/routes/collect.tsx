@@ -1,4 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState } from "react";
 
 export const Route = createFileRoute("/collect")({
@@ -6,40 +8,72 @@ export const Route = createFileRoute("/collect")({
 });
 
 function Collect() {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
   const [collecting, setCollecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const imageRef = useRef<HTMLImageElement | null>(null);
+  const pendingFrameRef = useRef<string | null>(null);
+  const rafIdRef = useRef<number | null>(null);
 
   async function startCollect() {
     setError(null);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      streamRef.current = stream;
+      await invoke("start_camera_stream");
       setCollecting(true);
-    } catch {
-      setError("无法访问摄像头，请检查权限设置。");
+    } catch (e) {
+      setError(`无法启动后台摄像头: ${String(e)}`);
     }
   }
 
-  function stopCollect() {
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
+  async function stopCollect() {
+    await invoke("stop_camera_stream");
+    if (imageRef.current) {
+      imageRef.current.src = "";
     }
     setCollecting(false);
   }
 
   useEffect(() => {
-    if (collecting && videoRef.current && streamRef.current) {
-      videoRef.current.srcObject = streamRef.current;
-    }
-  }, [collecting]);
+    let unlistenFrame: UnlistenFn | null = null;
+    let unlistenError: UnlistenFn | null = null;
+
+    const bindEvents = async () => {
+      unlistenFrame = await listen<string>("camera-frame", (event) => {
+        pendingFrameRef.current = `data:image/jpeg;base64,${event.payload}`;
+        if (rafIdRef.current !== null) {
+          return;
+        }
+        rafIdRef.current = requestAnimationFrame(() => {
+          if (imageRef.current && pendingFrameRef.current) {
+            imageRef.current.src = pendingFrameRef.current;
+            setError(null);
+          }
+          pendingFrameRef.current = null;
+          rafIdRef.current = null;
+        });
+      });
+      unlistenError = await listen<string>("camera-error", (event) => {
+        setError(event.payload);
+      });
+    };
+    void bindEvents();
+
+    return () => {
+      if (unlistenFrame) {
+        unlistenFrame();
+      }
+      if (unlistenError) {
+        unlistenError();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
-      streamRef.current?.getTracks().forEach((t) => t.stop());
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+      invoke("stop_camera_stream");
     };
   }, []);
 
@@ -63,13 +97,9 @@ function Collect() {
 
       {/* 摄像头画面 */}
       <div className="w-full max-w-2xl aspect-video rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 shadow-inner flex items-center justify-center">
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
-          className={`w-full h-full object-cover ${collecting ? "block" : "hidden"}`}
-        />
+        {collecting && (
+          <img ref={imageRef} alt="摄像头视频流" className="w-full h-full object-cover" />
+        )}
         {!collecting && (
           <p className="text-gray-400 text-sm">点击「开始采集」以显示画面</p>
         )}
