@@ -4,3 +4,41 @@ body,
 #root {
   overscroll-behavior: none;
 }
+
+/* 导航栏渐变边框环绕动画 */
+@keyframes gradient-spin {
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+.nav-gradient-border {
+  position: relative;
+  padding: 2px;
+  border-radius: 9999px;
+  overflow: hidden;
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+}
+
+.nav-gradient-border::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 300%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  background: conic-gradient(
+    from 0deg,
+    #ec4899 0deg,
+    #a855f7 120deg,
+    #22d3ee 240deg,
+    #ec4899 360deg
+  );
+  animation: gradient-spin 3s linear infinite;
+}
+
+.nav-gradient-border > * {
+  position: relative;
+  z-index: 1;
+}
