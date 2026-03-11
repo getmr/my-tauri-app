@@ -11,7 +11,10 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as CollectRouteImport } from './routes/collect'
 import { Route as AboutRouteImport } from './routes/about'
+import { Route as PostRouteRouteImport } from './routes/post/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as PostIndexRouteImport } from './routes/post/index'
+import { Route as PostListRouteImport } from './routes/post/list'
 
 const CollectRoute = CollectRouteImport.update({
   id: '/collect',
@@ -23,38 +26,69 @@ const AboutRoute = AboutRouteImport.update({
   path: '/about',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PostRouteRoute = PostRouteRouteImport.update({
+  id: '/post',
+  path: '/post',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PostIndexRoute = PostIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => PostRouteRoute,
+} as any)
+const PostListRoute = PostListRouteImport.update({
+  id: '/list',
+  path: '/list',
+  getParentRoute: () => PostRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/post': typeof PostRouteRouteWithChildren
   '/about': typeof AboutRoute
   '/collect': typeof CollectRoute
+  '/post/list': typeof PostListRoute
+  '/post/': typeof PostIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/collect': typeof CollectRoute
+  '/post/list': typeof PostListRoute
+  '/post': typeof PostIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/post': typeof PostRouteRouteWithChildren
   '/about': typeof AboutRoute
   '/collect': typeof CollectRoute
+  '/post/list': typeof PostListRoute
+  '/post/': typeof PostIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/about' | '/collect'
+  fullPaths: '/' | '/post' | '/about' | '/collect' | '/post/list' | '/post/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/about' | '/collect'
-  id: '__root__' | '/' | '/about' | '/collect'
+  to: '/' | '/about' | '/collect' | '/post/list' | '/post'
+  id:
+    | '__root__'
+    | '/'
+    | '/post'
+    | '/about'
+    | '/collect'
+    | '/post/list'
+    | '/post/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  PostRouteRoute: typeof PostRouteRouteWithChildren
   AboutRoute: typeof AboutRoute
   CollectRoute: typeof CollectRoute
 }
@@ -75,6 +109,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AboutRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/post': {
+      id: '/post'
+      path: '/post'
+      fullPath: '/post'
+      preLoaderRoute: typeof PostRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -82,11 +123,40 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/post/': {
+      id: '/post/'
+      path: '/'
+      fullPath: '/post/'
+      preLoaderRoute: typeof PostIndexRouteImport
+      parentRoute: typeof PostRouteRoute
+    }
+    '/post/list': {
+      id: '/post/list'
+      path: '/list'
+      fullPath: '/post/list'
+      preLoaderRoute: typeof PostListRouteImport
+      parentRoute: typeof PostRouteRoute
+    }
   }
 }
 
+interface PostRouteRouteChildren {
+  PostListRoute: typeof PostListRoute
+  PostIndexRoute: typeof PostIndexRoute
+}
+
+const PostRouteRouteChildren: PostRouteRouteChildren = {
+  PostListRoute: PostListRoute,
+  PostIndexRoute: PostIndexRoute,
+}
+
+const PostRouteRouteWithChildren = PostRouteRoute._addFileChildren(
+  PostRouteRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  PostRouteRoute: PostRouteRouteWithChildren,
   AboutRoute: AboutRoute,
   CollectRoute: CollectRoute,
 }
