@@ -34,6 +34,9 @@ export const Route = createRootRoute({
             >
               Post
             </Link>
+            <Link to="/hero" className="px-5 py-1.5 rounded-full text-sm font-medium text-gray-400 transition-all hover:text-white hover:bg-gray-700 [&.active]:text-white [&.active]:bg-gray-700">
+              Hero
+            </Link>
           </nav>
         </div>
       </div>

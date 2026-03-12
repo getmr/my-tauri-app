@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as CollectRouteImport } from './routes/collect'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as PostRouteRouteImport } from './routes/post/route'
+import { Route as HeroRouteRouteImport } from './routes/hero/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PostIndexRouteImport } from './routes/post/index'
 import { Route as PostListRouteImport } from './routes/post/list'
@@ -29,6 +30,11 @@ const AboutRoute = AboutRouteImport.update({
 const PostRouteRoute = PostRouteRouteImport.update({
   id: '/post',
   path: '/post',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HeroRouteRoute = HeroRouteRouteImport.update({
+  id: '/hero',
+  path: '/hero',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -49,6 +55,7 @@ const PostListRoute = PostListRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/hero': typeof HeroRouteRoute
   '/post': typeof PostRouteRouteWithChildren
   '/about': typeof AboutRoute
   '/collect': typeof CollectRoute
@@ -57,6 +64,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/hero': typeof HeroRouteRoute
   '/about': typeof AboutRoute
   '/collect': typeof CollectRoute
   '/post/list': typeof PostListRoute
@@ -65,6 +73,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/hero': typeof HeroRouteRoute
   '/post': typeof PostRouteRouteWithChildren
   '/about': typeof AboutRoute
   '/collect': typeof CollectRoute
@@ -73,12 +82,20 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/post' | '/about' | '/collect' | '/post/list' | '/post/'
+  fullPaths:
+    | '/'
+    | '/hero'
+    | '/post'
+    | '/about'
+    | '/collect'
+    | '/post/list'
+    | '/post/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/about' | '/collect' | '/post/list' | '/post'
+  to: '/' | '/hero' | '/about' | '/collect' | '/post/list' | '/post'
   id:
     | '__root__'
     | '/'
+    | '/hero'
     | '/post'
     | '/about'
     | '/collect'
@@ -88,6 +105,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  HeroRouteRoute: typeof HeroRouteRoute
   PostRouteRoute: typeof PostRouteRouteWithChildren
   AboutRoute: typeof AboutRoute
   CollectRoute: typeof CollectRoute
@@ -114,6 +132,13 @@ declare module '@tanstack/react-router' {
       path: '/post'
       fullPath: '/post'
       preLoaderRoute: typeof PostRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hero': {
+      id: '/hero'
+      path: '/hero'
+      fullPath: '/hero'
+      preLoaderRoute: typeof HeroRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -156,6 +181,7 @@ const PostRouteRouteWithChildren = PostRouteRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  HeroRouteRoute: HeroRouteRoute,
   PostRouteRoute: PostRouteRouteWithChildren,
   AboutRoute: AboutRoute,
   CollectRoute: CollectRoute,
