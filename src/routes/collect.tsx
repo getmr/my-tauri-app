@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState } from "react";
 
@@ -12,45 +12,73 @@ function Collect() {
   const [error, setError] = useState<string | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const pendingFrameRef = useRef<string | null>(null);
+  const currentFrameRef = useRef<string | null>(null);
   const rafIdRef = useRef<number | null>(null);
+  const frameChannelRef = useRef<Channel<ArrayBuffer> | null>(null);
+
+  function revokeUrl(url: string | null) {
+    if (url) {
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  function clearFrameState() {
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
+    revokeUrl(pendingFrameRef.current);
+    revokeUrl(currentFrameRef.current);
+    pendingFrameRef.current = null;
+    currentFrameRef.current = null;
+    if (imageRef.current) {
+      imageRef.current.src = "";
+    }
+  }
 
   async function startCollect() {
     setError(null);
     try {
-      await invoke("start_camera_stream");
-      setCollecting(true);
-    } catch (e) {
-      setError(`无法启动后台摄像头: ${String(e)}`);
-    }
-  }
-
-  async function stopCollect() {
-    await invoke("stop_camera_stream");
-    if (imageRef.current) {
-      imageRef.current.src = "";
-    }
-    setCollecting(false);
-  }
-
-  useEffect(() => {
-    let unlistenFrame: UnlistenFn | null = null;
-    let unlistenError: UnlistenFn | null = null;
-
-    const bindEvents = async () => {
-      unlistenFrame = await listen<string>("camera-frame", (event) => {
-        pendingFrameRef.current = `data:image/jpeg;base64,${event.payload}`;
+      clearFrameState();
+      const frameChannel = new Channel<ArrayBuffer>((payload) => {
+        const nextUrl = URL.createObjectURL(new Blob([payload], { type: "image/jpeg" }));
+        revokeUrl(pendingFrameRef.current);
+        pendingFrameRef.current = nextUrl;
         if (rafIdRef.current !== null) {
           return;
         }
         rafIdRef.current = requestAnimationFrame(() => {
           if (imageRef.current && pendingFrameRef.current) {
             imageRef.current.src = pendingFrameRef.current;
+            revokeUrl(currentFrameRef.current);
+            currentFrameRef.current = pendingFrameRef.current;
             setError(null);
           }
           pendingFrameRef.current = null;
           rafIdRef.current = null;
         });
       });
+      frameChannelRef.current = frameChannel;
+      await invoke("start_camera_stream", { onFrame: frameChannel });
+      setCollecting(true);
+    } catch (e) {
+      frameChannelRef.current = null;
+      clearFrameState();
+      setError(`无法启动后台摄像头: ${String(e)}`);
+    }
+  }
+
+  async function stopCollect() {
+    await invoke("stop_camera_stream");
+    frameChannelRef.current = null;
+    clearFrameState();
+    setCollecting(false);
+  }
+
+  useEffect(() => {
+    let unlistenError: UnlistenFn | null = null;
+
+    const bindEvents = async () => {
       unlistenError = await listen<string>("camera-error", (event) => {
         setError(event.payload);
       });
@@ -58,9 +86,6 @@ function Collect() {
     void bindEvents();
 
     return () => {
-      if (unlistenFrame) {
-        unlistenFrame();
-      }
       if (unlistenError) {
         unlistenError();
       }
@@ -69,10 +94,8 @@ function Collect() {
 
   useEffect(() => {
     return () => {
-      if (rafIdRef.current !== null) {
-        cancelAnimationFrame(rafIdRef.current);
-        rafIdRef.current = null;
-      }
+      frameChannelRef.current = null;
+      clearFrameState();
       invoke("stop_camera_stream");
     };
   }, []);

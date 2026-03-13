@@ -2407,7 +2407,6 @@ dependencies = [
 name = "my-tauri-app"
 version = "0.1.0"
 dependencies = [
- "base64 0.22.1",
  "image",
  "nokhwa",
  "serde",

@@ -3,8 +3,6 @@ use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use base64::engine::general_purpose::STANDARD as BASE64;
-use base64::Engine as _;
 use image::codecs::jpeg::JpegEncoder;
 use image::ColorType;
 use nokhwa::pixel_format::RgbFormat;
@@ -12,6 +10,7 @@ use nokhwa::utils::{
     CameraFormat, CameraIndex, FrameFormat, RequestedFormat, RequestedFormatType, Resolution,
 };
 use nokhwa::Camera;
+use tauri::ipc::{Channel, Response};
 use tauri::{AppHandle, Emitter, State};
 
 struct CameraState {
@@ -19,7 +18,11 @@ struct CameraState {
 }
 
 #[tauri::command]
-fn start_camera_stream(app: AppHandle, state: State<'_, CameraState>) -> Result<(), String> {
+fn start_camera_stream(
+    app: AppHandle,
+    state: State<'_, CameraState>,
+    on_frame: Channel<Response>,
+) -> Result<(), String> {
     stop_camera_stream(state.clone())?;
 
     let (stop_tx, stop_rx) = std::sync::mpsc::channel::<()>();
@@ -104,7 +107,7 @@ fn start_camera_stream(app: AppHandle, state: State<'_, CameraState>) -> Result<
                     last_emit_at = Some(now);
 
                     let payload = if selected_frame_format == FrameFormat::MJPEG {
-                        BASE64.encode(frame.buffer())
+                        frame.buffer().to_vec()
                     } else {
                         let rgb = match frame.decode_image::<RgbFormat>() {
                             Ok(image) => image,
@@ -130,10 +133,10 @@ fn start_camera_stream(app: AppHandle, state: State<'_, CameraState>) -> Result<
                             continue;
                         }
 
-                        BASE64.encode(encoded)
+                        encoded
                     };
 
-                    let _ = app.emit("camera-frame", payload);
+                    let _ = on_frame.send(Response::new(payload));
                 }
                 Err(e) => {
                     let _ = app.emit("camera-error", format!("读取摄像头帧失败: {e}"));
